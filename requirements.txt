@@ -1,1 +1,8 @@
-flask 
+Flask
+numpy
+pandas
+scikit-learn
+joblib
+requests
+psycopg2-binary
+sqlalchemy
