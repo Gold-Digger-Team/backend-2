@@ -6,16 +6,84 @@ from sqlalchemy import create_engine, text
 from config import Config
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
+from dateutil.relativedelta import relativedelta
+from datetime import date
 
 app = Flask(__name__)
 app.config.from_object(Config)
 
 engine = create_engine(Config.DATABASE_URL, echo=Config.DEBUG)
 
-model = joblib.load('linreg_multi.pkl')
+model = joblib.load('linreg_poly.pkl')
 
 @app.route('/predict', methods=['POST'])
-def predict():
+def predict_2():
+    try:
+        with engine.connect() as connection:
+            current_date = datetime.now(ZoneInfo("Asia/Jakarta")).date()
+
+            check_today_in_db = connection.execute(text("""
+                SELECT COUNT(*) FROM public."PrediksiEmas"
+                WHERE tanggal_prediksi = :today;
+            """), {"today": current_date}).fetchone()[0]
+            if check_today_in_db >= 1:
+                return jsonify({
+                    "status": "warning",
+                    "message": "Prediksi untuk hari ini sudah ada di database."
+                }), 202
+                
+            today = date.today()
+            formatted = today.strftime("%d %B %Y")
+            print(formatted)
+
+            tomorrow = today + relativedelta(days=1)
+            formatted_tomorrow = tomorrow.strftime("%d %B %Y")  
+            print(formatted_tomorrow)
+
+            date_list = []
+            for i in range(1,6):
+                future_date = today + relativedelta(years=i)
+                formatted_future_date = future_date.strftime("%d %B %Y")
+                date_list.append(formatted_future_date)
+            
+            predict_data_list = pd.to_datetime(date_list)
+            predict_data_as_int = predict_data_list.astype(int)
+            var_t = predict_data_as_int / 120_000_000_000_000_000
+            exp_t = np.exp(var_t)
+
+            predict_data_arr = np.column_stack((var_t, exp_t))
+            prediction = model.predict(predict_data_arr).flatten().tolist()
+
+            # save prediction to db
+            insert_query = text("""
+                INSERT INTO public."PrediksiEmas" (tanggal_prediksi, tahun_ke, harga_prediksi)
+                VALUES (:tanggal_prediksi, :tahun_ke, :harga_prediksi);
+            """)
+
+            for i, pred in enumerate(prediction):
+                connection.execute(insert_query, {
+                    "tanggal_prediksi": current_date,
+                    "tahun_ke": i + 1,
+                    "harga_prediksi": float(pred)
+            })
+
+            connection.commit()
+
+            response = {
+                "status": "success",
+                "timestamp": datetime.now(ZoneInfo("Asia/Jakarta")).isoformat(),
+                "prediction": [
+                    {"year": i+1, "predicted_price": float(pred)}
+                    for i, pred in enumerate(prediction)
+                ]
+            }
+
+            return jsonify(response), 200
+    
+    except Exception as e:
+        return f"Database connection error: {str(e)}"
+
+def predict_1():
     try:
         with engine.connect() as connection:
             current_date = datetime.now(ZoneInfo("Asia/Jakarta")).date()
