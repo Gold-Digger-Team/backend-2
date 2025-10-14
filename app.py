@@ -26,9 +26,9 @@ def predict():
             """), {"today": current_date}).fetchone()[0]
             if check_today_in_db >= 1:
                 return jsonify({
-                    "status": "failed",
+                    "status": "warning",
                     "message": "Prediksi untuk hari ini sudah ada di database."
-                }), 400
+                }), 202
             
             result = connection.execute(text(""" SELECT tanggal, harga_pergram_idr from public."Emas";"""))
             rows = result.fetchall()
