@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  backend:
+    build: .
+    container_name: gold-digger-backend
+    ports:
+      - "5000:5000"
+    environment:
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_NAME=${DB_NAME}
+    volumes:
+      - ./linreg_multi.pkl:/app/linreg_multi.pkl
+      - ./random_forest_model.pkl:/app/random_forest_model.pkl
+    depends_on:
+      - db
+    restart: unless-stopped
+    networks:
+      - gold-digger-network
+
+  db:
+    image: postgres:15-alpine
+    container_name: gold-digger-postgres
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASS}
+      - POSTGRES_DB=${DB_NAME}
+    ports:
+      - "${DB_PORT}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - gold-digger-network
+
+volumes:
+  postgres_data:
+
+networks:
+  gold-digger-network:
+    driver: bridge
