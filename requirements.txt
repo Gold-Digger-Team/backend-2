@@ -1,7 +1,7 @@
 Flask
 numpy
 pandas
-scikit-learn
+scikit-learn==1.7.0
 joblib
 requests
 psycopg2-binary
