@@ -9,4 +9,3 @@ sqlalchemy
 python-dotenv
 gunicorn
 flask_sqlalchemy 
-psycopg2
