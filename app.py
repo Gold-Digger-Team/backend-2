@@ -18,30 +18,66 @@ model = joblib.load('linreg_multi.pkl')
 def predict():
     try:
         with engine.connect() as connection:
-            result = connection.execute(text("SELECT * from data_emas_harian;"))
+            current_date = datetime.now(ZoneInfo("Asia/Jakarta")).date()
+
+            check_today_in_db = connection.execute(text("""
+                SELECT COUNT(*) FROM public."PrediksiEmas"
+                WHERE tanggal_prediksi = :today;
+            """), {"today": current_date}).fetchone()[0]
+            if check_today_in_db >= 1:
+                return jsonify({
+                    "status": "failed",
+                    "message": "Prediksi untuk hari ini sudah ada di database."
+                }), 400
+            
+            result = connection.execute(text(""" SELECT tanggal, harga_pergram_idr from public."Emas";"""))
             rows = result.fetchall()
             row_dict = {row[0]: row[1] for row in rows}
             row_keys = list(row_dict.keys())
 
             predict_dict  = {}
+
+            print(f"Total row_keys: {len(row_keys)}")
             
-            current_date = datetime.now(ZoneInfo("Asia/Jakarta")).date()
             for i in range(1825, 4, -7):
                 past_date = current_date - timedelta(days=i)
+                print(past_date)
                 past_harga_emas = row_dict.get(past_date)
+                print(f"Past harga emas for {past_date}: {past_harga_emas}")
                 
+                # if past_harga_emas is None:
+                #     past_harga_emas = row_dict.get(row_keys[i])
+
                 if past_harga_emas is None:
-                    past_harga_emas = row_dict.get(row_keys[i])
+                    print(f"[INFO] {past_date} tidak ada di DB, cari fallback...")
+
+                # cari tanggal terdekat sebelumnya yang tersedia
+                fallback_date = None
+                for j in range(1, 8):  # maksimal 7 hari ke belakang
+                    candidate_date = past_date - timedelta(days=j)
+                    if candidate_date in row_dict:
+                        fallback_date = candidate_date
+                        break
+
+                if fallback_date:
+                    past_harga_emas = row_dict[fallback_date]
+                    print(f"  ↳ pakai fallback tanggal {fallback_date}")
+                else:
+                    past_harga_emas = np.nan
+                    print(f"  ⚠️ tidak ada data 7 hari ke belakang dari {past_date}")
                 
                 predict_dict[f'Price_t-{i}'] = past_harga_emas
+
             
             predict_df = pd.DataFrame([predict_dict])
             prediction = model.predict(predict_df).flatten().tolist()
 
+            print(prediction)
+
             # save prediction to db
             insert_query = text("""
-                INSERT INTO prediksi_emas (tanggal_prediksi, tahun_ke, harga_prediksi)
-                VALUES (:tanggal_prediksi, :tahun_ke, :harga_prediksi)
+                INSERT INTO public."PrediksiEmas" (tanggal_prediksi, tahun_ke, harga_prediksi)
+                VALUES (:tanggal_prediksi, :tahun_ke, :harga_prediksi);
             """)
 
             for i, pred in enumerate(prediction):
