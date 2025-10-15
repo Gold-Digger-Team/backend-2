@@ -12,6 +12,11 @@ from datetime import date
 app = Flask(__name__)
 app.config.from_object(Config)
 
+CORS(app, origins=[
+    "http://localhost:4173",        
+    "https://192.168.23.22:4173"      
+])
+
 engine = create_engine(Config.DATABASE_URL, echo=Config.DEBUG)
 
 model = joblib.load('linreg_poly.pkl')
