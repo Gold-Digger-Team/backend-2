@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from dateutil.relativedelta import relativedelta
 from datetime import date
+from flask_cors import CORS
 
 app = Flask(__name__)
 app.config.from_object(Config)
